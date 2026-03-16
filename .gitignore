@@ -1,0 +1,42 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+
+# Environment variables
+.env
+.env.*
+!.env.example
+
+# Database
+data/*.db
+
+# Models / artifacts
+data/*.pkl
+data/*.json
+
+# Results (CSV exports)
+results/
+
+# Logs
+logs/
+
+# Test / Lint caches
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Docs (private data images only)
+docs/archive/data/
+
+# OS
+.DS_Store
+Thumbs.db

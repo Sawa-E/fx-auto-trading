@@ -1,0 +1,145 @@
+"""ウォークフォワード検証 — 拡大窓 (ADR 001 #6).
+
+資料5: 「1990年〜予測対象の1つ手前まで」方式。
+各ウィンドウでOptuna最適化 + 予測。1ヶ月ごとにスライド。
+"""
+
+from __future__ import annotations
+
+import logging
+from dataclasses import dataclass
+
+import numpy as np
+import pandas as pd
+
+from fx_auto_trading.config import LabelConfig, ModelConfig, TradeConfig
+from fx_auto_trading.exceptions import OverfitWarning
+from fx_auto_trading.features.pipeline import build_dataset
+from fx_auto_trading.models.trainer import LightGBMTrainer
+
+logger = logging.getLogger(__name__)
+
+
+@dataclass
+class WFResult:
+    """ウォークフォワード1期間の結果."""
+
+    period_start: str
+    period_end: str
+    y_true: np.ndarray
+    y_prob: np.ndarray
+    feature_names: list[str]
+    feature_importance: dict[str, float]
+    train_size: int
+    val_size: int
+
+
+def walk_forward_validate(
+    df: pd.DataFrame,
+    horizon: int = 4,
+    feature_columns: list[str] | None = None,
+    label_config: LabelConfig | None = None,
+    model_config: ModelConfig | None = None,
+    trade_config: TradeConfig | None = None,
+    val_months: int = 1,
+    min_train_size: int = 500,
+) -> list[WFResult]:
+    """拡大窓ウォークフォワード検証を実行する.
+
+    Args:
+        df: OHLCデータ (timestamp index)
+        horizon: 予測ホライゾン
+        feature_columns: 使用する特徴量のリスト (Noneなら全28個)
+        label_config: ラベル設定
+        model_config: モデル設定
+        trade_config: 取引設定
+        val_months: 検証ウィンドウの月数
+        min_train_size: 最小訓練サンプル数
+
+    Returns:
+        各期間のWFResult リスト
+    """
+    if label_config is None:
+        label_config = LabelConfig()
+
+    # 全データセット生成
+    X_all, y_all = build_dataset(
+        df,
+        horizon=horizon,
+        label_config=label_config,
+        feature_columns=feature_columns,
+    )
+
+    if len(X_all) < min_train_size + 100:
+        logger.warning(
+            "データ不足: %d件 < 最小訓練%d + 検証100件",
+            len(X_all),
+            min_train_size,
+        )
+        return []
+
+    # 月ごとの境界を取得
+    monthly_groups = X_all.groupby(pd.Grouper(freq="MS"))
+    month_starts = sorted(monthly_groups.groups.keys())
+
+    results: list[WFResult] = []
+
+    for i, val_start in enumerate(month_starts):
+        # 訓練: 先頭 〜 val_start の手前まで（拡大窓）
+        train_mask = X_all.index < val_start
+        X_train = X_all[train_mask]
+        y_train = y_all[train_mask]
+
+        if len(X_train) < min_train_size:
+            continue
+
+        # 検証: val_start 〜 次の月の手前まで
+        if i + val_months < len(month_starts):
+            val_end = month_starts[i + val_months]
+            val_mask = (X_all.index >= val_start) & (X_all.index < val_end)
+        else:
+            val_mask = X_all.index >= val_start
+
+        X_val = X_all[val_mask]
+        y_val = y_all[val_mask]
+
+        if len(X_val) < 10:
+            continue
+
+        logger.info(
+            "WF期間 %d: train=%d件 [〜%s], val=%d件 [%s〜]",
+            len(results) + 1,
+            len(X_train),
+            str(val_start.date()),
+            len(X_val),
+            str(val_start.date()),
+        )
+
+        # Optuna + 訓練
+        trainer = LightGBMTrainer(model_config, trade_config)
+        trainer.optimize(X_train, y_train, X_val, y_val)
+
+        try:
+            trainer.train(X_train, y_train, X_val, y_val)
+        except OverfitWarning as e:
+            logger.warning("WF期間 %d: %s → スキップ", len(results) + 1, e)
+            continue
+
+        y_prob = trainer.predict_proba(X_val)
+        fi = trainer.feature_importance(X_val.columns.tolist())
+
+        results.append(
+            WFResult(
+                period_start=str(val_start.date()),
+                period_end=str(X_val.index[-1].date()),
+                y_true=y_val.values,
+                y_prob=y_prob,
+                feature_names=X_val.columns.tolist(),
+                feature_importance=fi.to_dict(),
+                train_size=len(X_train),
+                val_size=len(X_val),
+            )
+        )
+
+    logger.info("ウォークフォワード完了: %d 期間", len(results))
+    return results
