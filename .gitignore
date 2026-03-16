@@ -37,6 +37,12 @@ htmlcov/
 # Docs (private data images only)
 docs/archive/data/
 
+# Archive (v1)
+_archive/
+
+# Claude Code
+.claude/
+
 # OS
 .DS_Store
 Thumbs.db
