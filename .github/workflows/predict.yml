@@ -24,7 +24,7 @@ jobs:
           key: ${{ runner.os }}-pip-${{ hashFiles('pyproject.toml') }}
 
       - name: Install
-        run: pip install httpx pandas scikit-learn lightgbm optuna matplotlib
+        run: pip install -e .
 
       - name: Predict
         env:

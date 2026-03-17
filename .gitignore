@@ -24,8 +24,8 @@ data/*.json
 # pkl/jsonはgit追跡する（GitHub Actionsで使用）
 
 # Results (CSV exports, keep summary)
-# Results (forward predictions are runtime-generated)
-results/forward_predictions.csv
+# Results (mdのみgit追跡、CSV/データは除外)
+results/*.csv
 
 # Logs
 logs/
