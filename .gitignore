@@ -20,11 +20,12 @@ data/*.db
 # Models / artifacts
 data/*.pkl
 data/*.json
-models/*.pkl
+!models/production_model.pkl
 !models/production_meta.json
 
 # Results (CSV exports, keep summary)
 results/*.csv
+!results/simulated_forward.csv
 !results/evaluation_summary.md
 
 # Logs

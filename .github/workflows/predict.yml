@@ -1,0 +1,45 @@
+name: Hourly Prediction
+
+on:
+  schedule:
+    # 平日毎時1分 (UTC)
+    - cron: '1 * * * 1-5'
+  workflow_dispatch: # 手動実行も可能
+
+jobs:
+  predict:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Cache pip packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('pyproject.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
+      - name: Install dependencies
+        run: |
+          pip install httpx pandas scikit-learn lightgbm optuna matplotlib
+
+      - name: Run prediction
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        run: |
+          python scripts/predict.py
+
+      - name: Upload prediction CSV
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: predictions-${{ github.run_number }}
+          path: results/forward_predictions.csv
+          retention-days: 90
