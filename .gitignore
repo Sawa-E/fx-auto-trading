@@ -20,13 +20,13 @@ data/*.db
 # Models / artifacts
 data/*.pkl
 data/*.json
-!models/production_model.pkl
-!models/production_meta.json
+# Models (Secretsで管理、gitには入れない)
+models/*.pkl
+models/*.json
 
 # Results (CSV exports, keep summary)
-results/*.csv
-!results/simulated_forward.csv
-!results/evaluation_summary.md
+# Results (全て非公開)
+results/
 
 # Logs
 logs/

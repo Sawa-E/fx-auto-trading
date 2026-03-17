@@ -30,6 +30,14 @@ jobs:
         run: |
           pip install httpx pandas scikit-learn lightgbm optuna matplotlib
 
+      - name: Download model from release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p models
+          gh release download v0.1.0 -p 'production_model.pkl' -D models/
+          gh release download v0.1.0 -p 'production_meta.json' -D models/
+
       - name: Run prediction
         env:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
