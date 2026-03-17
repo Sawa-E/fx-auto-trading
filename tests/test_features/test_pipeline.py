@@ -31,7 +31,7 @@ class TestBuildFeatures:
             assert col in result.columns, f"Missing: {col}"
 
     def test_feature_count(self) -> None:
-        assert len(FEATURE_COLUMNS) == 28
+        assert len(FEATURE_COLUMNS) == 34  # 28 - cci + 4 deltas + 3 MTF
 
 
 class TestBuildDataset:

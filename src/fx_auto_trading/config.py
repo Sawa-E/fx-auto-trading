@@ -80,8 +80,8 @@ class ModelConfig:
     n_optuna_trials: int = 50
     random_state: int = 42
 
-    # 過学習検出 (ADR 004 #2)
-    overfit_threshold: float = 0.10  # 精度差 > 10% で警告
+    # 過学習検出 (ADR 004 #2: 10%→15%に緩和。マーケットデータは再現性が低く10%は厳しすぎた)
+    overfit_threshold: float = 0.15  # 精度差 > 15% で警告
 
 
 @dataclass

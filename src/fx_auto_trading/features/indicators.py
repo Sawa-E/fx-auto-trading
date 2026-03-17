@@ -1,6 +1,7 @@
-"""テクニカル指標 — カテゴリA: 6個 (ADR 006).
+"""テクニカル指標 — カテゴリA (ADR 006) + 変化率特徴量.
 
 macd_hist, atr, adx, plus_di, minus_di, cci
++ delta系（指標の1期変化量）← 資料3「パラメータの時間変化が重要」
 """
 
 from __future__ import annotations
@@ -63,5 +64,7 @@ def cci(df: pd.DataFrame, period: int = 20) -> pd.Series:
     """Commodity Channel Index."""
     tp = (df["high"] + df["low"] + df["close"]) / 3
     sma = tp.rolling(window=period).mean()
-    mad = tp.rolling(window=period).apply(lambda x: (x - x.mean()).abs().mean())
+    mad = tp.rolling(window=period).apply(
+        lambda x: (x - x.mean()).abs().mean()
+    )
     return (tp - sma) / (0.015 * mad)

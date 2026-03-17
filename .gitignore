@@ -21,8 +21,9 @@ data/*.db
 data/*.pkl
 data/*.json
 
-# Results (CSV exports)
-results/
+# Results (CSV exports, keep summary)
+results/*.csv
+!results/evaluation_summary.md
 
 # Logs
 logs/
@@ -36,6 +37,9 @@ htmlcov/
 
 # Docs (private data images only)
 docs/archive/data/
+
+# Temp data
+histdata_tmp/
 
 # Archive (v1)
 _archive/
