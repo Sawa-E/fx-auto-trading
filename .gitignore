@@ -20,6 +20,8 @@ data/*.db
 # Models / artifacts
 data/*.pkl
 data/*.json
+models/*.pkl
+!models/production_meta.json
 
 # Results (CSV exports, keep summary)
 results/*.csv

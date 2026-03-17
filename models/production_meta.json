@@ -1,0 +1,70 @@
+{
+  "trained_at": "2026-03-18T02:45:36.586863",
+  "data_range": "2016-01-03 ~ 2026-03-16",
+  "data_count": 62528,
+  "dataset_count": 41447,
+  "horizon": 8,
+  "label_threshold_pips": 3.0,
+  "probability_threshold": 0.55,
+  "regime_filter": true,
+  "regime_adx_threshold": 25.0,
+  "selected_features": [
+    "macd_hist",
+    "vol_regime",
+    "adx",
+    "atr",
+    "plus_di",
+    "close_sma_ratio",
+    "day_of_week",
+    "minus_di",
+    "channel_pos_48",
+    "bb_position",
+    "rsi",
+    "delta_adx",
+    "delta_macd",
+    "roc_12",
+    "stoch_rsi_d"
+  ],
+  "best_params": {
+    "max_depth": 3,
+    "min_child_samples": 69,
+    "num_leaves": 46,
+    "reg_lambda": 1.2749707691298977,
+    "reg_alpha": 0.5644355367977313,
+    "learning_rate": 0.046226740383927774
+  },
+  "train_accuracy": 0.5377,
+  "val_accuracy": 0.5281,
+  "feature_importance": {
+    "vol_regime": 30,
+    "macd_hist": 23,
+    "plus_di": 23,
+    "day_of_week": 20,
+    "channel_pos_48": 17,
+    "close_sma_ratio": 15,
+    "atr": 14,
+    "minus_di": 13,
+    "adx": 11,
+    "roc_12": 10,
+    "delta_macd": 7,
+    "delta_adx": 4,
+    "stoch_rsi_d": 3,
+    "bb_position": 1,
+    "rsi": 0
+  },
+  "backtest_results": {
+    "win_rate": 0.601,
+    "profit_factor": 2.01,
+    "sharpe_ratio": 0.352,
+    "max_drawdown": 0.011,
+    "trades_per_day": 3.5,
+    "cumulative_profit_atr": 2281
+  },
+  "trade_config": {
+    "sl_atr_multiplier": 1.5,
+    "tp_atr_multiplier": 2.0,
+    "max_leverage": 5.0,
+    "max_drawdown": 0.1,
+    "spread_pips": 0.3
+  }
+}
