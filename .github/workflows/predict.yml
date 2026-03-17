@@ -2,9 +2,8 @@ name: Hourly Prediction
 
 on:
   schedule:
-    # 平日毎時1分 (UTC)
-    - cron: '1 * * * 1-5'
-  workflow_dispatch: # 手動実行も可能
+    - cron: '1 * * * 1-5'  # 平日毎時1分 (UTC)
+  workflow_dispatch:        # 手動実行
 
 jobs:
   predict:
@@ -18,36 +17,16 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Cache pip packages
+      - name: Cache pip
         uses: actions/cache@v4
         with:
           path: ~/.cache/pip
           key: ${{ runner.os }}-pip-${{ hashFiles('pyproject.toml') }}
-          restore-keys: |
-            ${{ runner.os }}-pip-
 
-      - name: Install dependencies
-        run: |
-          pip install httpx pandas scikit-learn lightgbm optuna matplotlib
+      - name: Install
+        run: pip install httpx pandas scikit-learn lightgbm optuna matplotlib
 
-      - name: Download model from release
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          mkdir -p models
-          gh release download v0.1.0 -p 'production_model.pkl' -D models/
-          gh release download v0.1.0 -p 'production_meta.json' -D models/
-
-      - name: Run prediction
+      - name: Predict
         env:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
-        run: |
-          python scripts/predict.py
-
-      - name: Upload prediction CSV
-        uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: predictions-${{ github.run_number }}
-          path: results/forward_predictions.csv
-          retention-days: 90
+        run: python scripts/predict.py

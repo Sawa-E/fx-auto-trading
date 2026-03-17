@@ -20,13 +20,12 @@ data/*.db
 # Models / artifacts
 data/*.pkl
 data/*.json
-# Models (Secretsで管理、gitには入れない)
-models/*.pkl
-models/*.json
+# Models
+# pkl/jsonはgit追跡する（GitHub Actionsで使用）
 
 # Results (CSV exports, keep summary)
-# Results (全て非公開)
-results/
+# Results (forward predictions are runtime-generated)
+results/forward_predictions.csv
 
 # Logs
 logs/
