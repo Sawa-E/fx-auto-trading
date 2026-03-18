@@ -5,7 +5,7 @@
   "dataset_count": 41447,
   "horizon": 8,
   "label_threshold_pips": 3.0,
-  "probability_threshold": 0.55,
+  "probability_threshold": 0.53,
   "regime_filter": true,
   "regime_adx_threshold": 25.0,
   "selected_features": [
@@ -53,12 +53,12 @@
     "rsi": 0
   },
   "backtest_results": {
-    "win_rate": 0.601,
-    "profit_factor": 2.01,
-    "sharpe_ratio": 0.352,
-    "max_drawdown": 0.011,
-    "trades_per_day": 3.5,
-    "cumulative_profit_atr": 2281
+    "win_rate": 0.573,
+    "profit_factor": 1.79,
+    "sharpe_ratio": 0.291,
+    "max_drawdown": 0.010,
+    "trades_per_day": 6.6,
+    "cumulative_profit_atr": 2928
   },
   "trade_config": {
     "sl_atr_multiplier": 1.5,
