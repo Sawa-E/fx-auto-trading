@@ -176,5 +176,12 @@ delta系（変化率）特徴量が追加されたことで、指標の方向変
 ### 閾値変更の注意点
 
 - **pklは共通**: モデル本体は同一。meta.jsonの`probability_threshold`のみ変更
-- **0.55に戻す場合**: meta.jsonの値を0.55に書き換えてpushするだけ
+- **backtest_resultsも連動変更**: 閾値に対応するバックテスト期待値をセットで更新する
+- **0.55に戻す場合**: meta.jsonの`probability_threshold`とbacktest_resultsを両方0.55の値に書き換えてpushするだけ
 - **模擬フォワードの差異**: Optuna trial数が異なるため同一モデルではない。参考値として比較
+
+### meta.json変更時のチェックリスト
+
+1. `probability_threshold` を変更
+2. `backtest_results` を該当閾値の値に更新（上記「確率閾値の全比較」表を参照）
+3. commit & push
