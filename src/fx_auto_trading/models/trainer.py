@@ -3,6 +3,7 @@
 ADR 004 #1: Kaggleデフォルトより強めの正則化。
 ADR 004 #2: 訓練/検証の精度差 > 10% で過学習警告。
 ADR 002 #4: 最適化目標はシャープレシオ。
+資料5（MUFG）: 確率キャリブレーションで出力を補正。
 """
 
 from __future__ import annotations
@@ -14,6 +15,7 @@ import lightgbm as lgb
 import numpy as np
 import optuna
 import pandas as pd
+from sklearn.calibration import CalibratedClassifierCV
 from sklearn.metrics import accuracy_score
 
 from fx_auto_trading.config import ModelConfig, TradeConfig
@@ -149,8 +151,17 @@ class LightGBMTrainer:
         X_val: pd.DataFrame,
         y_val: pd.Series,
         params: dict | None = None,
-    ) -> lgb.LGBMClassifier:
-        """LightGBMを訓練し、過学習チェックを実行する."""
+        calibration: str | None = None,
+    ) -> lgb.LGBMClassifier | CalibratedClassifierCV:
+        """LightGBMを訓練し、過学習チェックを実行する.
+
+        Args:
+            calibration: 確率キャリブレーション方式。
+                'sigmoid' = Platt scaling, 'isotonic' = Isotonic regression,
+                None = キャリブレーションなし。
+                資料5（MUFG）: マーケットデータの確率出力は保守的になりやすい。
+                キャリブレーションで0.51付近に集中する出力を補正する。
+        """
         if params is None:
             params = self.best_params or {}
 
@@ -161,10 +172,10 @@ class LightGBMTrainer:
             **params,
         }
 
-        model = lgb.LGBMClassifier(**full_params)
+        base_model = lgb.LGBMClassifier(**full_params)
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
-            model.fit(
+            base_model.fit(
                 X_train,
                 y_train,
                 eval_set=[(X_val, y_val)],
@@ -174,11 +185,9 @@ class LightGBMTrainer:
                 ],
             )
 
-        self.model = model
-
         # 過学習検出 (ADR 004 #2)
-        train_acc = accuracy_score(y_train, model.predict(X_train))
-        val_acc = accuracy_score(y_val, model.predict(X_val))
+        train_acc = accuracy_score(y_train, base_model.predict(X_train))
+        val_acc = accuracy_score(y_val, base_model.predict(X_val))
         gap = train_acc - val_acc
 
         logger.info(
@@ -196,19 +205,43 @@ class LightGBMTrainer:
             logger.warning(msg)
             raise OverfitWarning(msg)
 
-        return model
+        # 確率キャリブレーション（資料5: 確率出力の補正）
+        if calibration in ("sigmoid", "isotonic"):
+            logger.info("確率キャリブレーション: method=%s", calibration)
+            calibrated = CalibratedClassifierCV(
+                base_model, method=calibration, cv=2,
+            )
+            # 訓練データ全体で再フィット（内部CVでキャリブレーション学習）
+            import pandas as _pd
+            X_calib = _pd.concat([X_train, X_val])
+            y_calib = _pd.concat([y_train, y_val])
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                calibrated.fit(X_calib, y_calib)
+            self.model = calibrated
+            return calibrated
+
+        self.model = base_model
+        return base_model
 
     def predict_proba(self, X: pd.DataFrame) -> np.ndarray:
         """予測確率を返す."""
         if self.model is None:
             raise RuntimeError("モデルが訓練されていません")
-        return self.model.predict_proba(X)[:, 1]
+        proba = self.model.predict_proba(X)
+        if proba.ndim == 2:
+            return proba[:, 1]
+        return proba
 
     def feature_importance(self, feature_names: list[str]) -> pd.Series:
         """変数重要度を返す."""
         if self.model is None:
             raise RuntimeError("モデルが訓練されていません")
+        # CalibratedClassifierCVの場合、内部のestimatorから取得
+        model = self.model
+        if isinstance(model, CalibratedClassifierCV):
+            model = model.calibrated_classifiers_[0].estimator
         return pd.Series(
-            self.model.feature_importances_,
+            model.feature_importances_,
             index=feature_names,
         ).sort_values(ascending=False)

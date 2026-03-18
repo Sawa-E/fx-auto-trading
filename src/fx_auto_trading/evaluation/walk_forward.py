@@ -1,6 +1,7 @@
-"""ウォークフォワード検証 — 拡大窓 (ADR 001 #6).
+"""ウォークフォワード検証 — 拡大窓 / スライディングウィンドウ.
 
-資料5: 「1990年〜予測対象の1つ手前まで」方式。
+資料5: 「1990年〜予測対象の1つ手前まで」方式（拡大窓）。
+資料3: 「パラメータαは時間変化する」→ スライディングウィンドウで直近に適応。
 各ウィンドウでOptuna最適化 + 予測。1ヶ月ごとにスライド。
 """
 
@@ -43,8 +44,11 @@ def walk_forward_validate(
     trade_config: TradeConfig | None = None,
     val_months: int = 1,
     min_train_size: int = 500,
+    sliding_window_years: int | None = None,
+    calibration: str | None = None,
+    fixed_params: dict | None = None,
 ) -> list[WFResult]:
-    """拡大窓ウォークフォワード検証を実行する.
+    """ウォークフォワード検証を実行する.
 
     Args:
         df: OHLCデータ (timestamp index)
@@ -55,6 +59,12 @@ def walk_forward_validate(
         trade_config: 取引設定
         val_months: 検証ウィンドウの月数
         min_train_size: 最小訓練サンプル数
+        sliding_window_years: Noneなら拡大窓、整数ならスライディングウィンドウ(年)。
+            資料3: パラメータαの時間変化に対応するため、直近N年のみ使用。
+        calibration: 確率キャリブレーション ('sigmoid', 'isotonic', None)。
+            資料5: 確率出力の保守的な集中を補正。
+        fixed_params: Optunaを使わず固定パラメータで訓練する場合に指定。
+            資料5: チューニングのやりすぎは過学習の原因。
 
     Returns:
         各期間のWFResult リスト
@@ -85,8 +95,15 @@ def walk_forward_validate(
     results: list[WFResult] = []
 
     for i, val_start in enumerate(month_starts):
-        # 訓練: 先頭 〜 val_start の手前まで（拡大窓）
-        train_mask = X_all.index < val_start
+        # 訓練窓の決定
+        if sliding_window_years is not None:
+            # スライディングウィンドウ（資料3: 直近N年のみ）
+            window_start = val_start - pd.DateOffset(years=sliding_window_years)
+            train_mask = (X_all.index >= window_start) & (X_all.index < val_start)
+        else:
+            # 拡大窓（従来方式）
+            train_mask = X_all.index < val_start
+
         X_train = X_all[train_mask]
         y_train = y_all[train_mask]
 
@@ -106,21 +123,31 @@ def walk_forward_validate(
         if len(X_val) < 10:
             continue
 
+        window_type = f"SW{sliding_window_years}Y" if sliding_window_years else "拡大"
         logger.info(
-            "WF期間 %d: train=%d件 [〜%s], val=%d件 [%s〜]",
+            "WF期間 %d (%s): train=%d件, val=%d件 [%s〜]",
             len(results) + 1,
+            window_type,
             len(X_train),
-            str(val_start.date()),
             len(X_val),
             str(val_start.date()),
         )
 
-        # Optuna + 訓練
         trainer = LightGBMTrainer(model_config, trade_config)
-        trainer.optimize(X_train, y_train, X_val, y_val)
+
+        if fixed_params is not None:
+            # 固定パラメータ（資料5: チューニングやりすぎ防止）
+            params = fixed_params
+        else:
+            # Optuna最適化
+            trainer.optimize(X_train, y_train, X_val, y_val)
+            params = None
 
         try:
-            trainer.train(X_train, y_train, X_val, y_val)
+            trainer.train(
+                X_train, y_train, X_val, y_val,
+                params=params, calibration=calibration,
+            )
         except OverfitWarning as e:
             logger.warning("WF期間 %d: %s → スキップ", len(results) + 1, e)
             continue

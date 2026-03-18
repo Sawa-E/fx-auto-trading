@@ -31,8 +31,8 @@ from fx_auto_trading.trading.engine import check_signals_and_results
 setup_logging(os.environ.get("FX_LOG_LEVEL", "INFO"))
 logger = logging.getLogger(__name__)
 
-MODEL_PATH = Path("models/production_model.pkl")
-META_PATH = Path("models/production_meta.json")
+MODEL_PATH = Path("models/production_model_v2.pkl")
+META_PATH = Path("models/production_meta_v2.json")
 
 
 def main() -> None:
