@@ -23,6 +23,14 @@ jobs:
           path: ~/.cache/pip
           key: ${{ runner.os }}-pip-${{ hashFiles('pyproject.toml') }}
 
+      - name: Restore state
+        uses: actions/cache@v4
+        with:
+          path: state/
+          key: fx-state-${{ github.run_number }}
+          restore-keys: |
+            fx-state-
+
       - name: Install
         run: pip install -e .
 

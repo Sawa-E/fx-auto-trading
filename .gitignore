@@ -52,3 +52,6 @@ _archive/
 # OS
 .DS_Store
 Thumbs.db
+
+# State (cached in GitHub Actions)
+state/

@@ -4,6 +4,9 @@
 1. 新シグナルの検出 → Discord通知
 2. 過去シグナルのSL/TPヒット判定 → Discord決済通知
 
+通知済みのシグナル・決済はnotified.jsonで管理し、重複通知を防止。
+累積残高もnotified.jsonで永続化する。
+
 Usage:
     uv run python scripts/predict.py
 """
@@ -33,6 +36,29 @@ logger = logging.getLogger(__name__)
 
 MODEL_PATH = Path("models/production_model_v2.pkl")
 META_PATH = Path("models/production_meta_v2.json")
+STATE_PATH = Path("state/notified.json")
+
+
+def load_state() -> dict:
+    """通知済み状態を読み込む."""
+    if STATE_PATH.exists():
+        with open(STATE_PATH) as f:
+            return json.load(f)
+    return {
+        "notified_signals": [],
+        "notified_trades": [],
+        "cumulative_wins": 0,
+        "cumulative_losses": 0,
+        "cumulative_pnl": 0.0,
+        "initial_balance": 30000,
+    }
+
+
+def save_state(state: dict) -> None:
+    """通知済み状態を保存する."""
+    STATE_PATH.parent.mkdir(parents=True, exist_ok=True)
+    with open(STATE_PATH, "w") as f:
+        json.dump(state, f, indent=2, ensure_ascii=False)
 
 
 def main() -> None:
@@ -56,7 +82,10 @@ def main() -> None:
     adx_threshold = meta.get("regime_adx_threshold", 25.0)
     tc = meta["trade_config"]
 
-    # 2. 最新データ取得（直近7日分）
+    # 2. 通知済み状態を読み込み
+    state = load_state()
+
+    # 3. 最新データ取得（直近7日分）
     collector = GmoFxCollector()
     end_date = date.today()
     start_date = end_date - timedelta(days=7)
@@ -73,10 +102,10 @@ def main() -> None:
         logger.warning("データ不足: %d本", len(df))
         return
 
-    # 3. 特徴量計算
+    # 4. 特徴量計算
     features = build_features(df)
 
-    # 4. シグナル検出 + 決済判定（ステートレス）
+    # 5. シグナル検出 + 決済判定（ステートレス）
     new_signals, completed_trades = check_signals_and_results(
         df=df,
         features=features,
@@ -87,13 +116,18 @@ def main() -> None:
         sl_mult=tc["sl_atr_multiplier"],
         tp_mult=tc["tp_atr_multiplier"],
         horizon=8,
-        initial_balance=30000,
+        initial_balance=state["initial_balance"],
         leverage=5,
         spread_pips=tc["spread_pips"],
     )
 
-    # 5. Discord通知 - 新シグナル
+    # 6. Discord通知 - 新シグナル（未通知のみ）
     for sig in new_signals:
+        sig_key = f"{sig.timestamp}_{sig.entry_price:.2f}"
+        if sig_key in state["notified_signals"]:
+            logger.info("シグナル通知済みスキップ: %s", sig_key)
+            continue
+
         logger.info(
             "シグナル: %s @ %.2f P=%.2f ADX=%.1f",
             sig.direction, sig.entry_price, sig.probability, sig.adx,
@@ -108,21 +142,35 @@ def main() -> None:
             tp_price=sig.tp_price,
             timestamp=sig.timestamp,
         )
+        state["notified_signals"].append(sig_key)
 
-    # 6. Discord通知 - 決済結果
-    # 通算成績を計算（直近の全completed_tradesから）
-    wins = sum(1 for t in completed_trades if t.result == "tp_hit")
-    losses = sum(1 for t in completed_trades if t.result == "sl_hit")
-    balance = 30000 + sum(t.pnl_yen for t in completed_trades)
-
+    # 7. Discord通知 - 決済結果（未通知のみ、累積残高）
     for trade in completed_trades:
+        trade_key = (
+            f"{trade.signal.timestamp}_{trade.signal.entry_price:.2f}"
+            f"_{trade.exit_price:.2f}_{trade.result}"
+        )
+        if trade_key in state["notified_trades"]:
+            logger.info("決済通知済みスキップ: %s", trade_key)
+            continue
+
+        # 累積更新
+        state["cumulative_pnl"] += trade.pnl_yen
+        if trade.result == "tp_hit":
+            state["cumulative_wins"] += 1
+        else:
+            state["cumulative_losses"] += 1
+
+        balance = state["initial_balance"] + state["cumulative_pnl"]
+
         logger.info(
-            "決済: %s %s @ %.2f → %.2f %+.0f円",
+            "決済: %s %s @ %.2f → %.2f %+.0f円 (累積残高: %.0f円)",
             trade.signal.direction,
             trade.result,
             trade.signal.entry_price,
             trade.exit_price,
             trade.pnl_yen,
+            balance,
         )
         send_trade_result(
             direction=trade.signal.direction,
@@ -131,9 +179,20 @@ def main() -> None:
             result=trade.result,
             pnl_yen=trade.pnl_yen,
             balance=balance,
-            wins=wins,
-            losses=losses,
+            wins=state["cumulative_wins"],
+            losses=state["cumulative_losses"],
         )
+        state["notified_trades"].append(trade_key)
+
+    # 8. 状態保存
+    save_state(state)
+
+    # 通知済みリストが長くなりすぎたら古いものを削除（直近200件保持）
+    if len(state["notified_signals"]) > 200:
+        state["notified_signals"] = state["notified_signals"][-200:]
+    if len(state["notified_trades"]) > 200:
+        state["notified_trades"] = state["notified_trades"][-200:]
+        save_state(state)
 
     if not new_signals and not completed_trades:
         logger.info("シグナルなし、決済なし")
